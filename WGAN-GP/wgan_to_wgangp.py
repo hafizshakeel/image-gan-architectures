@@ -1,7 +1,7 @@
 """
 Wasserstein GAN gradient penalty (WGAN-GP) Implementation: https://arxiv.org/abs/1704.00028
 
-This script contains the implementation of the WGAN (Wasserstein Generative Adversarial Network) model.
+This script contains the implementation of the WGAN-GP (Wasserstein GAN - gradient penalty) model.
 
 Author: Hafiz Shakeel Ahmad Awan
 Email: hafizshakeel1997@gmail.com
