@@ -2,7 +2,8 @@
 DCGAN Implementation: https://arxiv.org/abs/1511.06434
 
 This script contains the implementation of the DCGAN (Deep Convolutional Generative Adversarial Network) model.
-It is designed for generating realistic images from random noise using a generator and distinguishing real from fake images using a discriminator.
+It is designed for generating realistic images from random noise using a generator and distinguishing real from
+fake images using a discriminator.
 
 Author: Hafiz Shakeel Ahmad Awan
 Email: hafizshakeel1997@gmail.com
