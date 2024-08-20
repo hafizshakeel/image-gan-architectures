@@ -3,7 +3,7 @@ Wasserstein GAN gradient penalty (WGAN-GP) Implementation: https://arxiv.org/abs
 
 This script contains the implementation of the WGAN-GP (Wasserstein GAN - gradient penalty) model.
 
-Author: Hafiz Shakeel Ahmad Awan
+Implementation by: Hafiz Shakeel Ahmad Awan
 Email: hafizshakeel1997@gmail.com
 """
 
