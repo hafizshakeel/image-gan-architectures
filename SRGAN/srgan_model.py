@@ -4,7 +4,7 @@ Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Net
 
 This script contains the implementation of the SRGAN model.
 
-Author: Hafiz Shakeel Ahmad Awan
+Implementation by: Hafiz Shakeel Ahmad Awan
 Email: hafizshakeel1997@gmail.com
 """
 
