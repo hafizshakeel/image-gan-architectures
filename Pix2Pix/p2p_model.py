@@ -4,7 +4,7 @@ Image-to-Image Translation with Conditional Adversarial Networks
 
 This script contains the implementation of the Pix2Pix model.
 
-Author: Hafiz Shakeel Ahmad Awan
+Implementation by: Hafiz Shakeel Ahmad Awan
 Email: hafizshakeel1997@gmail.com
 """
 
