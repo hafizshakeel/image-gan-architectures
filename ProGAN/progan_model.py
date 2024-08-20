@@ -4,7 +4,7 @@ Progressive Growing of GANs for Improved Quality, Stability, and Variation
 
 This script contains the implementation of the CycleGAN model.
 
-Author: Hafiz Shakeel Ahmad Awan
+Implementation by: Hafiz Shakeel Ahmad Awan
 Email: hafizshakeel1997@gmail.com
 """
 
