@@ -5,9 +5,9 @@ Simplest / Basic GANs using feed-forward networks
 
 This script contains the implementation of a simple GAN (Generative Adversarial Network).
 It includes both the Discriminator and Generator models using basic feed-forward neural networks.
-The models are designed for generating and discriminating simple images, such as those from the MNIST dataset.
+The models are designed to generate and discriminate simple images, such as those from the MNIST dataset.
 
-Author: Hafiz Shakeel Ahmad Awan
+Implementation by: Hafiz Shakeel Ahmad Awan
 Email: hafizshakeel1997@gmail.com
 """
 
