@@ -3,7 +3,7 @@ Wasserstein GAN (WGAN) Implementation: https://arxiv.org/abs/1701.07875
 
 This script contains the implementation of the WGAN (Wasserstein Generative Adversarial Network) model.
 
-Author: Hafiz Shakeel Ahmad Awan
+Implementation by: Hafiz Shakeel Ahmad Awan
 Email: hafizshakeel1997@gmail.com
 """
 
