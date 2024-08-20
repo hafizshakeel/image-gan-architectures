@@ -4,7 +4,7 @@ Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks
 
 This script contains the implementation of the CycleGAN model.
 
-Author: Hafiz Shakeel Ahmad Awan
+Implementation by: Hafiz Shakeel Ahmad Awan
 Email: hafizshakeel1997@gmail.com
 """
 
