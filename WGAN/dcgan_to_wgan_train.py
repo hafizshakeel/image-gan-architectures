@@ -80,12 +80,13 @@ for epochs in range(NUM_EPOCHS):
             noise = torch.randn(cur_batch_size, NOISE_DIM, 1, 1).to(device=DEVICE)
             fake = gen(noise)
             critic_real = critic(real).reshape(-1)
-            critic_fake = critic(fake).reshape(-1)
-            loss_critic = -(torch.mean(critic_real)-torch.mean(critic_fake))  # See algo line 5 and formula in
-            # rectangular box. Optimization algo like RMSprop are designed to minimize a loss function. Since we want to
-            # maximize acc. to algo. (line 6), we transform this maximization problem into a minimization
-            # problem by negating the loss. This approach aligns with the optimization strategy
-            # where maximizing a value is equivalent to minimizing its negative.
+            critic_fake = critic(fake).reshape(-1)            
+            loss_critic = -(torch.mean(critic_real) - torch.mean(critic_fake))  
+            # Refer to algorithm line 5 and the formula in the rectangular box. Optimization algorithms like RMSprop 
+            # are designed to minimize loss functions. To align with the algorithm (line 6), where we aim to maximize, 
+            # we negate the loss. This transforms the maximization problem into a minimization problem, making it compatible 
+            # with standard optimization strategies.
+
 
             critic.zero_grad()
             loss_critic.backward(retain_graph=True)
