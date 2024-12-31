@@ -83,7 +83,7 @@ for epochs in range(NUM_EPOCHS):
             critic_fake = critic(fake).reshape(-1)            
             loss_critic = -(torch.mean(critic_real) - torch.mean(critic_fake))  
             # Refer to algorithm line 5 and the formula in the rectangular box. Optimization algorithms like RMSprop 
-            # are designed to minimize loss functions. To align with the algorithm (line 6), where we aim to maximize, 
+            # are designed to minimize loss functions. To align with the algorithm, where we aim to maximize, 
             # we negate the loss. This transforms the maximization problem into a minimization problem, making it compatible 
             # with standard optimization strategies.
             
