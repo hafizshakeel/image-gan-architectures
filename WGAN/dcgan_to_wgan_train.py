@@ -86,8 +86,7 @@ for epochs in range(NUM_EPOCHS):
             # are designed to minimize loss functions. To align with the algorithm (line 6), where we aim to maximize, 
             # we negate the loss. This transforms the maximization problem into a minimization problem, making it compatible 
             # with standard optimization strategies.
-
-
+            
             critic.zero_grad()
             loss_critic.backward(retain_graph=True)
             optim_critic.step()
