@@ -36,8 +36,11 @@ transform = transforms.Compose([
 
 # DATASETS (MNIST --> CHANNELS=1 & CELEB --> CHANNELS=3)
 # print(os.listdir())
-dataset = datasets.ImageFolder(root="dataset", transform=transform)  # Here, images are first downloaded
-# and store in root folder. there is no need to write the whole dataset class. Images should be in subfolder.
+dataset = datasets.ImageFolder(root="dataset", transform=transform)  
+# Images are stored in the root folder and organized into subfolders (one for each class). 
+# There’s no need to manually define the dataset class as ImageFolder automatically 
+# handles this structure.
+
 # dataset = datasets.MNIST(root="dataset/", transform=transforms, download=True)
 loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
