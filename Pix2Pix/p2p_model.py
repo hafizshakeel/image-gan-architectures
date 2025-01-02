@@ -82,8 +82,6 @@ class _convBlockG(nn.Module):
 class Generator(nn.Module):
     """
     U-Net-based Generator for image-to-image translation.
-    Input: 3x256x256
-    Output: 3x256x256
     """
     def __init__(self, in_channels, features):
         super(Generator, self).__init__()
