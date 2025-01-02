@@ -9,19 +9,20 @@ Email: hafizshakeel1997@gmail.com
 """
 
 # Import necessary libraries
-import sys
+
 import torch
-import torch.nn as nn
+from torch import nn
 from torchsummary import summary
 
-
-"""Discriminator part of Pix2Pix"""
-class ConvBlock(nn.Module):
+class _convBlockD(nn.Module):
+    """
+    A convolutional block for the Discriminator.
+    Applies a Conv2d -> BatchNorm2d -> LeakyReLU sequence.
+    """
     def __init__(self, in_channels, out_channels, stride):
-        super(ConvBlock, self).__init__()
-
+        super().__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, 4, stride, 1, bias=False, padding_mode="reflect"),
+            nn.Conv2d(in_channels, out_channels, kernel_size=4, stride=stride, padding=1, bias=False, padding_mode="reflect"),
             nn.BatchNorm2d(out_channels),
             nn.LeakyReLU(0.2)
         )
@@ -29,89 +30,94 @@ class ConvBlock(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
-
 class Discriminator(nn.Module):
-    def __init__(self, in_channels, features=[64, 128, 256, 512]):  # inp 256 --> 1x30x30 out
+    """
+    PatchGAN Discriminator.
+    Output: 1x30x30 grid for input size 256x256, where each grid cell represents a 70x70 patch in the input image.
+    """
+    def __init__(self, in_channels, features=[64, 128, 256, 512]):
         super(Discriminator, self).__init__()
-        # Discriminator architecture is: C64-C128-C256-C512
         self.initial = nn.Sequential(
-            # in_channels*2 since input is (x + y) or (inp_img + target_img) <-- concatenate along the channels &
-            # based on it tells the patch of specific region is real or fake
-            nn.Conv2d(in_channels * 2, features[0], 4, 2, 1, padding_mode="reflect"),
-            nn.LeakyReLU(0.2),
+            nn.Conv2d(in_channels * 2, features[0], 4, 2, 1, padding_mode="reflect"),  # Output shape: features[0] x 128 x 128
+            nn.LeakyReLU(0.2)
         )
-
         layers = []
         in_channels = features[0]
-        for feature in features[1:]:  # first layer isn't included
-            layers.append(ConvBlock(in_channels, feature, stride=1 if feature == features[-1] else 2)),
+        for feature in features[1:]:
+            layers.append(_convBlockD(in_channels, feature, stride=1 if feature == features[-1] else 2))  # Adjust stride for the last layer
             in_channels = feature
-        # last conv layer to map to 1-dimensional output (real or fake) - see architecture diagram
-        layers.append(nn.Conv2d(in_channels, 1, 4, 1, 1, padding_mode="reflect"))
-
+        layers.append(nn.Conv2d(in_channels, 1, 4, 1, 1, padding_mode="reflect"))  # Output shape: 1 x 30 x 30
         self.model = nn.Sequential(*layers)
 
     def forward(self, x, y):
-        x = torch.cat([x, y], dim=1)  # dim=1 along channels
+        x = torch.cat([x, y], dim=1)  # Concatenate input and target along channel dimension
         x = self.initial(x)
         x = self.model(x)
         return x
 
-
-"""Generator part of Pix2Pix"""
-# Block for down-sampling and up-sampling
-class Block(nn.Module):
-    def __init__(self, in_channels, out_channels, down=True, act="relu", use_dropout=False):
-        super(Block, self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, 4, 2, 1, bias=False, padding_mode="reflect")
-            if down
-            else nn.ConvTranspose2d(in_channels, out_channels, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU() if act == "relu" else nn.LeakyReLU(0.2),
-        )
-        self.use_dropout = use_dropout
-        self.dropout = nn.Dropout(0.5)
-        self.down = down
+class _convBlockG(nn.Module):
+    """
+    A convolutional block for the Generator.
+    Includes options for downsampling (Conv2d) or upsampling (ConvTranspose2d).
+    """
+    def __init__(self, in_channels, out_channels, down=True):
+        super().__init__()
+        if down:
+            self.block = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 4, 2, 1, bias=False, padding_mode="reflect"),  # Downsampling
+                nn.BatchNorm2d(out_channels),
+                nn.LeakyReLU(0.2)
+            )
+        else:
+            self.block = nn.Sequential(
+                nn.ConvTranspose2d(in_channels, out_channels, 4, 2, 1, bias=False),  # Upsampling
+                nn.BatchNorm2d(out_channels),
+                nn.Dropout(p=0.5),
+                nn.ReLU()
+            )
 
     def forward(self, x):
-        x = self.conv(x)
-        return self.dropout(x) if self.use_dropout else x
-
+        return self.block(x)
 
 class Generator(nn.Module):
+    """
+    U-Net-based Generator for image-to-image translation.
+    Input: 3x256x256
+    Output: 3x256x256
+    """
     def __init__(self, in_channels, features):
         super(Generator, self).__init__()
-        # U-Net Encoder: C64-C128-C256-C512-C512-C512-C512-C512
-        self.initial_down = nn.Sequential(
-            nn.Conv2d(in_channels, features, 4, 2, 1, padding_mode="reflect"),
+        self.init_down = nn.Sequential(
+            nn.Conv2d(in_channels, features, 4, 2, 1, padding_mode="reflect"),  # Output: features x 128 x 128
             nn.LeakyReLU(0.2)
-        )  # out 128x128 after stride = 2
-        self.down1 = Block(features, features * 2, down=True, act="leaky", use_dropout=False)  # out 64x64
-        self.down2 = Block(features * 2, features * 4, down=True, act="leaky", use_dropout=False)  # 32x32
-        self.down3 = Block(features * 4, features * 8, down=True, act="leaky", use_dropout=False)  # 16x16
-        self.down4 = Block(features * 8, features * 8, down=True, act="leaky", use_dropout=False)  # 8x8
-        self.down5 = Block(features * 8, features * 8, down=True, act="leaky", use_dropout=False)  # 4x4
-        self.down6 = Block(features * 8, features * 8, down=True, act="leaky", use_dropout=False)  # 2x2
-        self.bottleneck = nn.Sequential(
-            nn.Conv2d(features * 8, features * 8, 4, 2, 1, padding_mode="reflect"),  # 1x1
-            nn.ReLU(),
         )
-        # U-Net Decoder with skips: CD512-CD1024-CD1024-C1024-C1024-C512-C256-C128
-        self.up1 = Block(features * 8, features * 8, down=False, act="relu", use_dropout=True)  # out 2x2
-        self.up2 = Block(features * 8 * 2, features * 8, down=False, act="relu", use_dropout=True)  # 4x4; *2 for concat
-        self.up3 = Block(features * 8 * 2, features * 8, down=False, act="relu", use_dropout=True)  # 8x8
-        self.up4 = Block(features * 8 * 2, features * 8, down=False, act="relu", use_dropout=True)  # 16x16
-        self.up5 = Block(features * 8 * 2, features * 4, down=False, act="relu", use_dropout=True)  # 32x32
-        self.up6 = Block(features * 4 * 2, features * 2, down=False, act="relu", use_dropout=True)  # 64x64
-        self.up7 = Block(features * 2 * 2, features, down=False, act="relu", use_dropout=True)  # 128x128
+        # Encoder (Downsampling path)
+        self.down1 = _convBlockG(features, features * 2, down=True)  # Output: (features*2) x 64 x 64
+        self.down2 = _convBlockG(features * 2, features * 4, down=True)  # Output: (features*4) x 32 x 32
+        self.down3 = _convBlockG(features * 4, features * 8, down=True)  # Output: (features*8) x 16 x 16
+        self.down4 = _convBlockG(features * 8, features * 8, down=True)  # Output: (features*8) x 8 x 8
+        self.down5 = _convBlockG(features * 8, features * 8, down=True)  # Output: (features*8) x 4 x 4
+        self.down6 = _convBlockG(features * 8, features * 8, down=True)  # Output: (features*8) x 2 x 2
+        self.bottleneck = nn.Sequential(
+            nn.Conv2d(features * 8, features * 8, 4, 2, 1, padding_mode="reflect"),  # Output: (features*8) x 1 x 1
+            nn.ReLU()
+        )
+
+        # Decoder (Upsampling path)
+        self.up1 = _convBlockG(features * 8, features * 8, down=False)  # Output: (features*8) x 2 x 2
+        self.up2 = _convBlockG(features * 8 * 2, features * 8, down=False)  # Output: (features*8) x 4 x 4
+        self.up3 = _convBlockG(features * 8 * 2, features * 8, down=False)  # Output: (features*8) x 8 x 8
+        self.up4 = _convBlockG(features * 8 * 2, features * 8, down=False)  # Output: (features*8) x 16 x 16
+        self.up5 = _convBlockG(features * 8 * 2, features * 4, down=False)  # Output: (features*4) x 32 x 32
+        self.up6 = _convBlockG(features * 4 * 2, features * 2, down=False)  # Output: (features*2) x 64 x 64
+        self.up7 = _convBlockG(features * 2 * 2, features, down=False)  # Output: features x 128 x 128
         self.final_up = nn.Sequential(
-            nn.ConvTranspose2d(features * 2, in_channels, 4, 2, 1),
-            nn.Tanh(),
-        )  # 256x256
+            nn.ConvTranspose2d(features * 2, in_channels, 4, 2, 1),  # Output: in_channels x 256 x 256
+            nn.Tanh()
+        )
 
     def forward(self, x):
-        d1 = self.initial_down(x)
+        d1 = self.init_down(x)
         d2 = self.down1(d1)
         d3 = self.down2(d2)
         d4 = self.down3(d3)
@@ -128,7 +134,6 @@ class Generator(nn.Module):
         up7 = self.up7(torch.cat([up6, d2], 1))
         return self.final_up(torch.cat([up7, d1], 1))
 
-
 def test():
     x = torch.randn(1, 3, 256, 256)
     y = torch.randn(1, 3, 256, 256)
@@ -136,12 +141,9 @@ def test():
     gen = Generator(in_channels=3, features=64)
     preds_1 = disc(x, y)
     preds_2 = gen(x)
-    print(preds_1.shape, preds_2.shape)  # disc out: 1x30x30 meaning each value in the 30x30 grid sees
-    # a 70x70 patch in the original image & gen out: 3x256x256
+    print(preds_1.shape, preds_2.shape)  # disc out: 1x30x30, gen out: 3x256x256
     print(summary(disc, [(3, 256, 256), (3, 256, 256)]))
     print(summary(gen, (3, 256, 256)))
 
-
 if __name__ == "__main__":
-    # sys.exit()
     test()
