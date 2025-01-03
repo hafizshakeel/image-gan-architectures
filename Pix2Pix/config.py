@@ -2,43 +2,41 @@ import torch
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
-# What should I set num_workers to?
-# import os
-# import sys
-# print(os.cpu_count())
-# sys.exit()
-
+# Set device to GPU if available, otherwise CPU
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-TRAIN_DIR = "data/"
-VAL_DIR = "data/"
-LEARNING_RATE = 2e-4
-BATCH_SIZE = 2
-NUM_WORKERS = 2
-IMAGE_SIZE = 256
-CHANNELS_IMG = 3
-L1_LAMBDA = 100
-NUM_EPOCHS = 500
-LOAD_MODEL = False
-SAVE_MODEL = True
-CHECKPOINT_DISC = "disc.pth.tar"
-CHECKPOINT_GEN = "gen.pth.tar"
 
+# Paths and hyperparameters
+TRAIN_DIR = "data/"  # Training data directory
+VAL_DIR = "data/"    # Validation data directory
+LEARNING_RATE = 2e-4  # Learning rate
+BATCH_SIZE = 2        # Batch size for training
+NUM_WORKERS = 2       # Data loader worker threads
+IMAGE_SIZE = 256      # Image size (height and width)
+CHANNELS_IMG = 3      # Number of image channels (RGB)
+L1_LAMBDA = 100       # Weight for L1 loss
+NUM_EPOCHS = 500      # Number of training epochs
+LOAD_MODEL = False    # Flag to load pre-trained model
+SAVE_MODEL = True     # Flag to save trained model
+CHECKPOINT_DISC = "disc.pth.tar"  # Path to discriminator checkpoint
+CHECKPOINT_GEN = "gen.pth.tar"   # Path to generator checkpoint
+
+# Transformations for both input and target images
 both_transform = A.Compose(
-    [A.Resize(width=256, height=256),], additional_targets={"image0": "image"},
+    [A.Resize(width=256, height=256)], additional_targets={"image0": "image"}
 )
 
+# Transformations for input images only
 transform_only_input = A.Compose(
     [
-        # A.HorizontalFlip(p=0.5),  # need to check this should be only for inp?
-        # A.ColorJitter(p=0.2),
-        A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], max_pixel_value=255.0,),
+        A.Normalize(mean=[0.5] * 3, std=[0.5] * 3, max_pixel_value=255.0),
         ToTensorV2(),
     ]
 )
 
+# Transformations for target (mask) images only
 transform_only_mask = A.Compose(
     [
-        A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], max_pixel_value=255.0,),
+        A.Normalize(mean=[0.5] * 3, std=[0.5] * 3, max_pixel_value=255.0),
         ToTensorV2(),
     ]
 )
