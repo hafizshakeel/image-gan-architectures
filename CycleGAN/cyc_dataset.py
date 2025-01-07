@@ -8,6 +8,9 @@ from PIL import Image
 from torchvision.utils import save_image
 import config 
 
+# The HorseZebraDataset class can be used for any two sets of images (e.g., summer <--> winter, Monet painting <--> photo) 
+# by adjusting the directory paths in the config file. There is no need to define a separate dataset for every type of image pair. 
+# In the future, I plan to add a more generalized version of this dataset class.
 
 class HorseZebraDataset(Dataset):
     def __init__(self, root_zebra, root_horse, transform=None):
