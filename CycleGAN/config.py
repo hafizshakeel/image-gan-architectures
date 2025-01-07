@@ -12,7 +12,6 @@ VAL_DIR = "data/"
 # Hyperparameters for training
 BATCH_SIZE = 1  # Number of images per batch
 LEARNING_RATE = 2e-5  # Learning rate for the optimizer
-LAMBDA_IDENTITY = 0.0  # Weight for identity loss (can be used for identity mapping in CycleGAN - change accordingly)
 LAMBDA_CYCLE = 10  # Weight for cycle consistency loss
 NUM_WORKERS = 4  # Number of subprocesses for data loading
 NUM_EPOCHS = 10  # Number of epochs for training
