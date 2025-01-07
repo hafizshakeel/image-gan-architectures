@@ -137,8 +137,8 @@ def test():
     gen = Generator(3, 64)
     pred_1 = disc(x)
     pred_2 = gen(x)
-    print(pred_1.shape, pred_2.shape)   # disc out: 1x30x30 meaning each value in the 30x30 grid sees
-    # a 70x70 patch in the original image & gen out: 3x256x256
+    print(pred_1.shape, pred_2.shape)   # disc out: 1x30x30 meaning each value in the 30x30 grid corresponds to
+    # a 70x70 patch in the original image
     print(summary(disc, (3, 256, 256)))
     print(summary(gen, (3, 256, 256)))
 
