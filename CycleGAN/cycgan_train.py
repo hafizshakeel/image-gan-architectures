@@ -25,7 +25,7 @@ def main():
     )
 
     # Loss functions
-    L1 = nn.L1Loss()  # for the cycle consistency loss and also the identity loss
+    L1 = nn.L1Loss()  # for the cycle consistency loss
     mse = nn.MSELoss()  # for adversarial loss
 
     # Load Model
