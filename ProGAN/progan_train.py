@@ -16,7 +16,23 @@ import config
 torch.backends.cudnn.benchmark = True
 
 
-
+# get_loader function to create a DataLoader for each image resolution during training
+# This is necessary because the image size changes progressively during training.
+def get_loader(image_size):
+    # Apply transformations to resize images, normalize, and apply random horizontal flips.
+    transform = transforms.Compose(
+        [transforms.Resize((image_size, image_size)), 
+         transforms.ToTensor(), 
+         transforms.RandomHorizontalFlip(p=0.5),
+         transforms.Normalize([0.5 for _ in range(config.CHANNELS_IMG)], [0.5 for _ in range(config.CHANNELS_IMG)])]
+    )
+    # Choose batch size based on image size and VRAM capacity.
+    batch_size = config.BATCH_SIZES[int(log2(image_size / 4))]
+    # Load dataset using ImageFolder.
+    dataset = datasets.ImageFolder(root=config.DATASET, transform=transform)
+    # Create DataLoader with dataset and batch size, shuffle data and use multiple workers for efficiency.
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=config.NUM_WORKERS, pin_memory=True)
+    return loader, dataset
 
 
 def main():
