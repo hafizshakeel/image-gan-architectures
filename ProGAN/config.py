@@ -52,3 +52,6 @@ PROGRESSIVE_EPOCHS = [10] * len(BATCH_SIZES)
 
 # Fixed noise vector for generating consistent images to monitor progress.
 FIXED_NOISE = torch.randn(8, Z_DIM, 1, 1).to(DEVICE)
+
+# Number of worker threads for data loading. Increase if experiencing slow data loading.
+NUM_WORKERS = 4
