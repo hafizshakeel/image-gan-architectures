@@ -22,7 +22,6 @@ factors = [1, 1, 1, 1, 1 / 2, 1 / 4, 1 / 8, 1 / 16, 1 / 32]
 
 """Class for weighted scale convolution layer using equalized learning rate (ELR)"""
 
-
 # ELR Formula: W_f = W_i * sqrt( 2 / k * k * c ), where k is kernel size and c is in_channels.
 # The second part of the expression is a scale (He's initialization W^_i = w_i/c)
 class WSConv2d(nn.Module):
@@ -47,7 +46,6 @@ class WSConv2d(nn.Module):
 
 
 """Class for Pixel Normalization"""
-
 
 # PixelNorm Formula:
 # b_{x,y} = a_{x,y} * ( 1/N * sum_j=0^(N-1) (c_{x+j,y})^2 + epsilon )^(-1/2),
@@ -140,8 +138,8 @@ class Generator(nn.Module):
         # Perform fade-in between upscaled and generated image
         return self.fade_in(alpha, final_upscaled, final_out)
 
+"""Class for the Discriminator (Critic) Network"""
 
-# Class for the Discriminator (Critic)
 class Discriminator(nn.Module):
     def __init__(self, in_channels, img_channels):
         super().__init__()
