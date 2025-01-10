@@ -8,110 +8,122 @@ Implementation by: Hafiz Shakeel Ahmad Awan
 Email: hafizshakeel1997@gmail.com
 """
 
-# Import necessary libraries
-
 import torch
-import torch.nn as nn
+from torch import nn
 from torchsummary import summary
 
 
-class ConvBlock(nn.Module):
-    # Conv-BN-PReLU/LeakyReLU
-    def __init__(self, in_channels, out_channels, disc=False, use_act=True, use_bn=True, **kwargs):
-        super(ConvBlock, self).__init__()
-        self.use_act = use_act
-        self.cnn = nn.Conv2d(in_channels, out_channels, **kwargs, bias=not use_bn)  # Bias will be false for use_bn=True
-        self.bn = nn.BatchNorm2d(out_channels) if use_bn else nn.Identity()  # use_bn otherwise pass it through
-        self.act = nn.LeakyReLU(0.2, inplace=True) if disc else nn.PReLU(num_parameters=out_channels)
-        # nn.PRelu --> specify num of params such that each of these out channels have a separate slope
+"""Convolutional Block with optional BatchNorm and Activation"""
+
+# Conv-BN-PReLU/LeakyReLU
+class _convBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, BN=True, act="prelu", **kwargs):
+        super().__init__()
+        # Convolutional layer with or without BatchNorm and activation
+        self.conv = nn.Conv2d(in_channels, out_channels, **kwargs, bias=True if BN else False)
+        self.bn = nn.BatchNorm2d(out_channels) if BN else nn.Identity()
+
+        # Activation handling: "prelu" for PReLU, "leaky_relu" for LeakyReLU, or Identity for no activation
+        if act == "prelu":
+            self.act = nn.PReLU(num_parameters=out_channels)
+        elif act == "leaky_relu":
+            self.act = nn.LeakyReLU(0.2, inplace=True)
+        else:
+            self.act = nn.Identity()
 
     def forward(self, x):
-        return self.act(self.bn(self.cnn(x))) if self.use_act else self.bn(self.cnn(x))
+        return self.act(self.bn(self.conv(x)))
 
 
-class UpsampleBlock(nn.Module):
-    def __init__(self, in_ch, scale_factor):
+"""Residual Block with two convolutional layers and skip connection"""
+
+class ResBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, act="prelu"):
         super().__init__()
-        self.conv = nn.Conv2d(in_ch, in_ch * scale_factor ** 2, 3, 1, 1)  # scale_factor = 2
-        self.ps = nn.PixelShuffle(scale_factor)  # (in_ch * 4, H, W) --> in_c, H * 2, W * 2 make the W, H twice as large
-        self.act = nn.PReLU(num_parameters=in_ch)
+        self.res_blocks = nn.Sequential(
+            _convBlock(in_channels, out_channels, kernel_size=3, stride=1, padding=1, act=act),
+            _convBlock(out_channels, out_channels, kernel_size=3, stride=1, padding=1, act=None),
+        )
+
+    def forward(self, x):
+        return self.res_blocks(x) + x  # Skip connection (residual learning)
+
+
+"""Upsampling block using PixelShuffle"""
+
+class UpSample(nn.Module):
+    def __init__(self, in_channels, out_channels, upscale_factor=2):
+        super().__init__()
+        # Convolutional layer followed by PixelShuffle for upscaling
+        self.conv = nn.Conv2d(in_channels, out_channels * (upscale_factor ** 2), 3, 1, 1)
+        self.ps = nn.PixelShuffle(upscale_factor=upscale_factor)  # PixelShuffle to upscale
+        self.act = nn.PReLU(num_parameters=out_channels)
 
     def forward(self, x):
         return self.act(self.ps(self.conv(x)))
 
 
-class ResidualBlock(nn.Module):
-    def __init__(self, in_ch):
-        super().__init__()
-        self.block1 = ConvBlock(in_ch, in_ch, kernel_size=3, stride=1, padding=1)
-        self.block2 = ConvBlock(in_ch, in_ch, use_act=False, kernel_size=3, stride=1, padding=1)  # fig.elementwise sum
-
-    def forward(self, x):
-        out = self.block1(x)
-        out = self.block1(out)
-        return out + x  # output + input
-
+"""Generator network"""
 
 class Generator(nn.Module):
-    def __init__(self, in_channels, num_features, num_blocks):
+    def __init__(self, in_channels, num_features, num_res_block, act="prelu"):
         super().__init__()
-        self.initial = ConvBlock(in_channels, num_features, kernel_size=9, stride=1, padding=4, use_bn=False)
-        self.residuals = nn.Sequential(*[ResidualBlock(num_features) for _ in range(num_blocks)])  # list comprehension
-        # to create all the 16 blocks and use * to unwrap the residual block in that list & turn into nn.Seq.
-        # after B residual blocks
-        self.convblock = ConvBlock(num_features, num_features, kernel_size=3, stride=1, padding=1, use_act=False)
-        self.upsamples = nn.Sequential(UpsampleBlock(num_features, 2), UpsampleBlock(num_features, 2))
-        self.final = nn.Conv2d(num_features, in_channels, kernel_size=9, stride=1, padding=4)
+        self.initial = _convBlock(in_channels, num_features, BN=False, act=act, kernel_size=9, stride=1, padding=4)
+        self.res_block = nn.Sequential(*[
+            ResBlock(num_features, num_features, act=act) for _ in range(num_res_block)
+        ])  # List comprehension to create residual blocks
+        self.conv_block = _convBlock(num_features, num_features, BN=True, act=None, kernel_size=3, stride=1, padding=1)
+
+        # Upsampling using multiple UpSample blocks
+        self.up_sample = nn.Sequential(
+            UpSample(num_features, num_features),
+            UpSample(num_features, num_features)
+        )
+
+        # Final convolution to return to the input channel size
+        self.conv_final = nn.Conv2d(num_features, in_channels, 9, 1, 4)
 
     def forward(self, x):
-        initial = self.initial(x)
-        x = self.residuals(initial)
-        x = self.convblock(x) + initial
-        x = self.upsamples(x)
-        return torch.tanh(self.final(x))
+        initial = self.initial(x)  # Initial feature extraction
+        x = self.res_block(initial)  # Pass through residual blocks
+        x = self.conv_block(x) + initial  # Add skip connection from initial layer
+        x = self.up_sample(x)  # Upsample the feature map
+        return torch.tanh(self.conv_final(x))  # Final output after convolution and tanh activation
 
+
+"""Discriminator network"""
 
 class Discriminator(nn.Module):
-    def __init__(self, in_channels, features=[64, 64, 128, 128, 256, 256, 512, 512]):  # see fig. discriminator part
+    def __init__(self, in_channels, features, act="leaky_relu"):
         super().__init__()
-        blocks = []
-        for idx, feature in enumerate(features):
-            blocks.append(ConvBlock(in_channels, feature,  disc=True, use_act=True, use_bn=False if idx == 0 else True,
-                                    kernel_size=3, stride=1+idx % 2, padding=1))
+
+        layers = []
+        for idx, feature in enumerate(features):  # List of features: [64, 64, 128, 128, 256, 256, 512, 512]
+            self.in_channels = in_channels
+            layers.append(_convBlock(in_channels, feature, BN=False if idx == 0 else True, act=act,
+                                     kernel_size=3, stride=1 + idx % 2, padding=1))  # Stride even or odd
             in_channels = feature
-        self.blocks = nn.Sequential(*blocks)
-        self.classifier = nn.Sequential(
-            nn.AdaptiveAvgPool2d((6, 6)),  # if inp is 96x96 divide that by each of stride=2 --> result 6x6.
-            # It will also run for inp shape >96x96
+
+        self.layers = nn.Sequential(*layers)
+        self.linear = nn.Sequential(
+            nn.AdaptiveAvgPool2d((6, 6)),  # Adaptive pooling to a fixed size
             nn.Flatten(),
             nn.Linear(512 * 6 * 6, 1024),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(1024, 1)
+            nn.Linear(1024, 1),  # Output for binary classification: real vs fake
+            # nn.Sigmoid()  # No Sigmoid, use BCEWithLogitsLoss during training
         )
 
     def forward(self, x):
-        x = self.blocks(x)
-        return self.classifier(x)  # no sigmoid here because we'll use BCEWithLogitsLoss which include sigmoid
+        x = self.layers(x)  # Pass through convolution layers
+        return self.linear(x)  # Output the final binary classification score
 
 
-def test():
-    low_resolution = 24  # Input resolution for Generator
-    high_resolution = 96  # Output resolution for Generator and input resolution for Discriminator
+# Weight initialization function
+def weights_init(m):
+    if isinstance(m, nn.Conv2d):
+        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+    elif isinstance(m, nn.BatchNorm2d):
+        nn.init.constant_(m.weight, 1)
+        nn.init.constant_(m.bias, 0)
 
-    with torch.cuda.amp.autocast():
-        x = torch.randn((1, 3, low_resolution, low_resolution))
-        gen = Generator(in_channels=3, num_features=64, num_blocks=16)
-        gen_out = gen(x)
-        disc = Discriminator(in_channels=3)
-        disc_out = disc(gen_out)
-
-        print(gen_out.shape)
-        print(disc_out.shape)
-
-    # Print summaries for both models
-    summary(gen, (3, low_resolution, low_resolution))
-    summary(disc, (3, high_resolution, high_resolution))
-
-
-if __name__ == "__main__":
-    test()
