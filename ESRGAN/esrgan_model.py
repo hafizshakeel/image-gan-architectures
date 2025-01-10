@@ -13,10 +13,11 @@ import torch
 import torch.nn as nn
 from torchsummary import summary
 
-# Note: This implementation closely follows the network design of SRGAN. Due to the limited details provided in the ESRGAN paper regarding 
-# specific implementation aspects, this code leverages the structure of SRGAN, along with insights from the figures in the ESRGAN paper 
-# and information from the official implementation. While the implementation is based on these references, it's not entirely certain. 
-# Training and testing the model will help determine its effectiveness.
+# Note: This implementation closely follows the network design of SRGAN. Due to the limited details provided in the ESRGAN paper regarding
+# specific implementation aspects, this code leverages the structure of SRGAN, along with insights from the figures in the ESRGAN paper
+# and information from the official implementation. While the implementation is based on these references, it's not entirely certain.
+# Training and testing the model will help determine its effectiveness. Additionally, note that the 'relativistic discriminator' from ESRGAN
+# has not been implemented; instead, the discriminator from the SRGAN network is used.
 
 
 """Convolutional Block with optional Activation"""
