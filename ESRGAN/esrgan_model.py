@@ -10,73 +10,105 @@ Email: hafizshakeel1997@gmail.com
 
 # Import necessary libraries
 import torch
-from torch import nn
+import torch.nn as nn
 from torchsummary import summary
 
 
-class convBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, use_act, **kwargs):
-        super(convBlock, self).__init__()
-        self.cnn = nn.Conv2d(in_channels, out_channels, **kwargs, bias=True)
-        self.act = nn.LeakyReLU(0.2, inplace=True) if use_act else nn.Identity()
+"""Convolutional Block with optional Activation"""
+
+# Convolutional Block with optional activation (PReLU/LeakyReLU/Identity)
+class _convBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, act="leaky_relu", **kwargs):
+        super().__init__()
+        # Convolutional layer with specified kernel size, stride, padding, etc.
+        self.conv = nn.Conv2d(in_channels, out_channels, **kwargs)
+
+        # Activation function selection
+        if act == "leaky_relu":
+            self.act = nn.LeakyReLU(0.2, inplace=True)
+        elif act == "prelu":
+            self.act = nn.PReLU(num_parameters=out_channels)
+        else:
+            self.act = nn.Identity()
 
     def forward(self, x):
-        return self.act(self.cnn(x))
+        return self.act(self.conv(x))
 
 
-class UpsampleBlock(nn.Module):
-    def __init__(self, in_ch, scale_factor=2):
-        super(UpsampleBlock, self).__init__()
-        self.upsample = nn.Upsample(scale_factor=scale_factor, mode="nearest")
-        self.conv = nn.Conv2d(in_ch, in_ch, 3, 1, 1, bias=True)
-        self.act = nn.LeakyReLU(0.2, inplace=True)
+""" Deep Residual Block with five convolutional layers and skip connection"""
 
-    def forward(self, x):
-        return self.act(self.conv(self.upsample(x)))
+class DeepResBlock(nn.Module):
+    def __init__(self, in_channels, features=32, act="leaky_relu", beta=0.2):
+        super().__init__()
+        self.beta = beta
+        self.blocks = nn.ModuleList()
 
-class DenseResidualBlock(nn.Module):
-    def __init__(self, in_channels, channels=32, residual_beta=0.2):
-        super(DenseResidualBlock, self).__init__()
-        self.residual_beta = residual_beta
-        self.blocks = nn.ModuleList()  # when you want to do a for loop in forward part, it's good to use ModuleList()
-        # because those parameters will then be maintained by PyTorch ModuleList
-        # --> https://pytorch.org/docs/stable/generated/torch.nn.ModuleList.html
         for i in range(5):
+            # Adding convolutional blocks with increasing input channels for concatenation
             self.blocks.append(
-                convBlock(in_channels + channels * i, channels if i <= 3 else in_channels,
-                          use_act=True if i <= 3 else False, kernel_size=3, stride=1, padding=1)
+                _convBlock(in_channels + features * i, features if i <= 3 else in_channels,
+                           kernel_size=3, stride=1, padding=1, act=act if i <= 3 else False)
             )
 
     def forward(self, x):
-        # concatenate diff convBlock (see DenseBlock internal structure)
-        new_inputs = x
+        initial_input = x
         for block in self.blocks:
-            out = block(new_inputs)
-            new_inputs = torch.cat([new_inputs, out], dim=1)  # concatenate along the channel dimension
-        return self.residual_beta * out + x  # Concatenation bw dense blocks
+            out = block(initial_input)
+            # Concatenate output with previous inputs along the channel dimension
+            initial_input = torch.cat([initial_input, out], dim=1)
+        return (self.beta * out) + x  # Apply skip connection with scaling
 
+
+"""Residual-in-Residual Dense Block (RRDB)"""
 
 class RRDB(nn.Module):
-    def __init__(self, in_channels, residual_beta=0.2):
-        super(RRDB, self).__init__()
-        self.residual_beta = residual_beta
-        self.rrdb = nn.Sequential(*[DenseResidualBlock(in_channels) for _ in range(3)])
+    def __init__(self, in_channels, beta=0.2):
+        super().__init__()
+        self.beta = beta
+        # Three sequential DeepResBlocks within a Residual block - see fig.4
+        self.res_dense_block = nn.Sequential(*[DeepResBlock(in_channels) for _ in range(3)])
 
     def forward(self, x):
-        return self.rrdb(x) * self.residual_beta + x  # Concatenation out of dense blocks with x (down arrow in fig.)
+        out = self.res_dense_block(x)
+        return (self.beta * out) + x  # Residual scaling and skip connection
 
+
+"""Upsampling block using UpSample"""
+
+class UpSample(nn.Module):
+    def __init__(self, in_channels, scale_factor=2):
+        super().__init__()
+        # Convolution followed by nearest neighbor upsampling
+        self.conv = nn.Conv2d(in_channels, in_channels, 3, 1, 1)
+        self.ps = nn.Upsample(scale_factor=scale_factor, mode="nearest")
+        self.act = nn.LeakyReLU(0.2, inplace=True)
+
+    def forward(self, x):
+        return self.act(self.ps(self.conv(x)))
+
+
+"""Generator network"""
 
 class Generator(nn.Module):
-    def __init__(self, in_channels=3, num_features=64, num_blocks=23):
+    def __init__(self, in_channels, num_features, num_res_block, act="prelu"):
         super().__init__()
-        self.initial = nn.Conv2d(in_channels, num_features, 3, 1, 1, bias=True)
-        self.residuals = nn.Sequential(*[RRDB(num_features) for _ in range(num_blocks)])
-        # Behind self.residuals there are a lot of conv layers bc we're creating 23 of them and all of them
-        # are creating 3 DenseResidualBlock and all DenseResidualBlock are creating 5 conv blocks
-        self.conv = nn.Conv2d(num_features, num_features, 3, 1, 1)
-        self.upsamples = nn.Sequential(
-            UpsampleBlock(num_features), UpsampleBlock(num_features),
+        # Initial convolutional block
+        self.initial = _convBlock(in_channels, num_features, kernel_size=9, stride=1, padding=4, act=act)
+
+        # Series of residual blocks
+        self.res_blocks = nn.Sequential(*[
+            DeepResBlock(num_features) for _ in range(num_res_block)
+        ])
+
+        # Convolutional block for skip connection
+        self.conv_block = _convBlock(num_features, num_features, kernel_size=3, stride=1, padding=1, act=None)
+
+        # Upsampling to higher resolution
+        self.up_sample = nn.Sequential(
+            UpSample(num_features), UpSample(num_features)
         )
+
+        # Final convolutional layers to return to original channel size
         self.final = nn.Sequential(
             nn.Conv2d(num_features, num_features, 3, 1, 1, bias=True),
             nn.LeakyReLU(0.2, inplace=True),
@@ -84,62 +116,78 @@ class Generator(nn.Module):
         )
 
     def forward(self, x):
-        initial = self.initial(x)
-        x = self.conv(self.residuals(initial)) + initial  # final concatenation (down arrow top img)
-        x = self.upsamples(x)
-        return self.final(x)
+        initial = self.initial(x)  # Initial feature extraction
+        x = self.res_blocks(initial)  # Pass through residual blocks
+        x = self.conv_block(x) + initial  # Add skip connection from initial layer
+        x = self.up_sample(x)  # Upsample the feature map
+        return self.final(x)  # Final output
 
 
-# Discriminator from SRGAN network
+"""Discriminator network"""
+
 class Discriminator(nn.Module):
-    def __init__(self, in_channels=3, features=[64, 64, 128, 128, 256, 256, 512, 512]):  # see fig. discriminator part
+    def __init__(self, in_channels, features, act="leaky_relu"):
         super().__init__()
-        blocks = []
+        layers = []
         for idx, feature in enumerate(features):
-            blocks.append(convBlock(in_channels, feature, use_act=True, kernel_size=3, stride=1 + idx % 2, padding=1))
-            in_channels = feature
-        self.blocks = nn.Sequential(*blocks)
-        self.classifier = nn.Sequential(
-            nn.AdaptiveAvgPool2d((6, 6)),  # if inp is 96x96 divide that by each of stride=2 --> result 6x6.
-            # It will also run for inp shape >96x96 like 128x128
+            # Adding convolutional blocks with varying stride for downsampling
+            layers.append(_convBlock(in_channels, feature, act=act, kernel_size=3, stride=1 + idx % 2, padding=1))
+            in_channels = feature  # Update input channels for the next layer
+
+        self.layers = nn.Sequential(*layers)  # Sequential model of convolutional layers
+
+        # Linear layers for classification
+        self.linear = nn.Sequential(
+            nn.AdaptiveAvgPool2d((6, 6)),  # Pool to fixed 6x6 size
             nn.Flatten(),
-            nn.Linear(512 * 6 * 6, 1024),
+            nn.Linear(512 * 6 * 6, 1024),  # Fully connected layer
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(1024, 1)
+            nn.Linear(1024, 1),  # Output layer for binary classification (real vs fake)
         )
 
     def forward(self, x):
-        x = self.blocks(x)
-        return self.classifier(x)  # no sigmoid here because we'll use BCEWithLogitsLoss which include sigmoid
+        x = self.layers(x)  # Pass through convolution layers
+        return self.linear(x)  # Final binary classification output
 
 
-def initialize_weights(model, scale=0.1):
-    for m in model.modules():
-        if isinstance(m, nn.Conv2d):
-            nn.init.kaiming_normal_(m.weight.data)
-            m.weight.data *= scale
+# Function for initializing weights
+# Uses Kaiming initialization for Conv2d layers and sets BatchNorm weights and biases
+def weights_init(m):
+    if isinstance(m, nn.Conv2d):
+        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+    elif isinstance(m, nn.BatchNorm2d):
+        nn.init.constant_(m.weight, 1)
+        nn.init.constant_(m.bias, 0)
 
-        elif isinstance(m, nn.Linear):
-            nn.init.kaiming_normal_(m.weight.data)
-            m.weight.data *= scale
 
-
+# Test function to verify model outputs and shapes
 def test():
-    gen = Generator()
-    disc = Discriminator()
-    low_res = 24
-    high_res = 96
-    x = torch.randn((5, 3, low_res, low_res))
-    gen_out = gen(x)
-    disc_out = disc(gen_out)
+    low_resolution = 24  # Input resolution for Generator
+    high_resolution = 96  # Output resolution for Generator and input resolution for Discriminator
 
-    print(gen_out.shape)
-    print(disc_out.shape)
+    with torch.no_grad():  # No gradient computation during testing
+        x = torch.randn((1, 3, low_resolution, low_resolution))  # Random low-resolution input
+        disc_features = [64, 64, 128, 128, 256, 256, 512, 512]  # Feature map sizes for Discriminator
 
-    # Print summaries for both models
-    summary(gen, (3, low_res, low_res))
-    summary(disc, (3, high_res, high_res))
+        # Instantiate and initialize Generator
+        gen = Generator(in_channels=3, num_features=64, num_res_block=8, act="prelu")
+        gen.apply(weights_init)  # Apply custom weights initialization
+        gen_out = gen(x)  # Generate super-resolved image
+
+        # Instantiate and initialize Discriminator
+        disc = Discriminator(in_channels=3, features=disc_features, act="leaky_relu")
+        disc.apply(weights_init)  # Apply custom weights initialization
+        disc_out = disc(gen_out)  # Discriminate between real and fake
+
+        print(gen_out.shape)  # Expected Generator output shape: (1, 3, 96, 96)
+        print(disc_out.shape)  # Expected Discriminator output shape: (1, 1)
+
+    # Uncomment to print detailed summaries of both models
+    summary(gen, (3, low_resolution, low_resolution))
+    summary(disc, (3, high_resolution, high_resolution))
 
 
 if __name__ == "__main__":
     test()
+
+
