@@ -127,3 +127,29 @@ def weights_init(m):
         nn.init.constant_(m.weight, 1)
         nn.init.constant_(m.bias, 0)
 
+
+# Test function to check model outputs
+def test():
+    low_resolution = 24  # Input resolution for Generator
+    high_resolution = 96  # Output resolution for Generator and input resolution for Discriminator
+
+    with torch.no_grad():  # Disable gradient calculation for testing
+        x = torch.randn((1, 3, low_resolution, low_resolution))  # Random low-resolution input
+        disc_features = [64, 64, 128, 128, 256, 256, 512, 512]
+        gen = Generator(in_channels=3, num_features=64, num_res_block=8, act="prelu")
+        gen.apply(weights_init)  # Apply weight initialization
+        gen_out = gen(x)  # Generate super-resolved image
+        disc = Discriminator(in_channels=3, features=disc_features, act="leaky_relu")
+        disc.apply(weights_init)  # Apply weight initialization
+        disc_out = disc(gen_out)  # Discriminate between real and fake
+
+        print(gen_out.shape)  # Expected: (1, 3, 96, 96)
+        print(disc_out.shape)  # Expected: (1, 1)
+
+    # Print summaries for both models
+    summary(gen, (3, low_resolution, low_resolution))
+    summary(disc, (3, high_resolution, high_resolution))
+
+
+if __name__ == "__main__":
+    test()
