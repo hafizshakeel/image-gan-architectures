@@ -1,6 +1,6 @@
 # Image GAN Architectures
 
-A comprehensive collection of GAN (Generative Adversarial Network) implementations in PyTorch, focusing on image generation and manipulation tasks.
+A collection of GAN (Generative Adversarial Network) implementations in PyTorch, focusing on image generation and manipulation tasks.
 
 ## Implementations
 
